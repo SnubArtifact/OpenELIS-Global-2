@@ -10,12 +10,12 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.openelisglobal.common.rest.BaseRestController;
 import org.openelisglobal.login.valueholder.UserSessionData;
-import org.openelisglobal.notebook.form.PharmaManifestImportForm;
+import org.openelisglobal.notebook.form.ImmunologyManifestImportForm;
+import org.openelisglobal.notebook.service.ImmunologyManifestImportService;
+import org.openelisglobal.notebook.service.ImmunologyManifestImportService.ImmunologyManifestImportResult;
+import org.openelisglobal.notebook.service.ImmunologyManifestImportService.ParseError;
+import org.openelisglobal.notebook.service.ImmunologyManifestImportService.ParsedManifest;
 import org.openelisglobal.notebook.service.NotebookEntryService;
-import org.openelisglobal.notebook.service.PharmaManifestImportService;
-import org.openelisglobal.notebook.service.PharmaManifestImportService.ParseError;
-import org.openelisglobal.notebook.service.PharmaManifestImportService.ParsedManifest;
-import org.openelisglobal.notebook.service.PharmaManifestImportService.PharmaManifestImportResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -29,31 +29,32 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * REST controller for Pharmaceuticals manifest CSV import operations. Supports
- * the updated dataPoints schema with: - Required: sampleName, lotBatchNumber,
- * dateOfManufacture, expiryRetestDate, storageCondition, ownerRequester -
- * Optional: alphanumericCode, chemicalIupacName, gradeSpecification,
- * chainOfCustodyDetails, patientId, clinicalTrialNumber, consentStatus -
- * Auto-generated: uniqueSampleId, barcodeQrCode
+ * REST controller for Immunology laboratory manifest CSV import operations.
+ * Supports reception metadata with: - Required: uniqueParentSampleId,
+ * projectNameId, deliveryManifestReference, collectionDateTime,
+ * receptionDateTime, sourceOrigin - Sample Type: sampleType (validated against
+ * Immunology lab types) - Optional: sampleVolume, storageConditionOnArrival,
+ * transportTemperature, receivingPersonnelName, manifestVerificationStatus,
+ * patientId, notes - Auto-generated: accessionNumber, barcodeQrCode
  */
 @RestController
-@RequestMapping("/rest/notebook/pharma")
-public class PharmaManifestImportController extends BaseRestController {
+@RequestMapping("/rest/notebook/immunology")
+public class ImmunologyManifestImportController extends BaseRestController {
 
     @Autowired
-    private PharmaManifestImportService pharmaManifestImportService;
+    private ImmunologyManifestImportService immunologyManifestImportService;
 
     @Autowired
     private NotebookEntryService notebookEntryService;
 
     /**
-     * Get valid sample types for the Pharmaceutical laboratory. Returns sample
-     * types that are both in the valid pharma list AND exist in the database.
+     * Get valid sample types for the Immunology laboratory. Returns sample types
+     * that are both in the valid immunology list AND exist in the database.
      */
     @GetMapping(value = "/sample-types", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public ResponseEntity<Map<String, Object>> getValidSampleTypes() {
-        List<Map<String, String>> sampleTypes = pharmaManifestImportService.getValidPharmaSampleTypes();
+        List<Map<String, String>> sampleTypes = immunologyManifestImportService.getValidImmunologySampleTypes();
 
         Map<String, Object> response = new HashMap<>();
         response.put("sampleTypes", sampleTypes);
@@ -65,7 +66,7 @@ public class PharmaManifestImportController extends BaseRestController {
     @PostMapping(value = "/entry/{entryId}/samples/preview-manifest", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public ResponseEntity<Map<String, Object>> previewManifestForEntry(@PathVariable("entryId") Integer entryId,
-            @RequestPart("file") MultipartFile file, @RequestPart("mapping") PharmaManifestImportForm form) {
+            @RequestPart("file") MultipartFile file, @RequestPart("mapping") ImmunologyManifestImportForm form) {
 
         Optional<org.openelisglobal.notebook.valueholder.NotebookEntry> optEntry = notebookEntryService.getMatch("id",
                 entryId);
@@ -74,8 +75,8 @@ public class PharmaManifestImportController extends BaseRestController {
         }
 
         try (InputStream inputStream = file.getInputStream()) {
-            ParsedManifest parsed = pharmaManifestImportService.parseManifestCsv(inputStream, form);
-            List<ParseError> validationErrors = pharmaManifestImportService.validateManifest(parsed);
+            ParsedManifest parsed = immunologyManifestImportService.parseManifestCsv(inputStream, form);
+            List<ParseError> validationErrors = immunologyManifestImportService.validateManifest(parsed);
 
             List<ParseError> allErrors = new java.util.ArrayList<>(parsed.errors());
             allErrors.addAll(validationErrors);
@@ -84,27 +85,27 @@ public class PharmaManifestImportController extends BaseRestController {
             response.put("entryId", entryId);
             response.put("totalRows", parsed.rows().size());
             response.put("validRows", parsed.rows().size() - allErrors.size());
-            response.put("totalSamplesToCreate", parsed.rows().size()); // Each row = 1 sample now
+            response.put("totalSamplesToCreate", parsed.rows().size()); // Each row = 1 sample
             response.put("rows", parsed.rows().stream().map(row -> {
                 Map<String, Object> rowMap = new HashMap<>();
                 rowMap.put("rowNumber", row.rowNumber());
                 // Required fields
-                rowMap.put("sampleName", row.sampleName());
-                rowMap.put("lotBatchNumber", row.lotBatchNumber());
-                rowMap.put("dateOfManufacture", row.dateOfManufacture());
-                rowMap.put("expiryRetestDate", row.expiryRetestDate());
-                rowMap.put("storageCondition", row.storageCondition());
-                rowMap.put("ownerRequester", row.ownerRequester());
-                // Sample type (validated against Pharmaceutical lab types)
+                rowMap.put("uniqueParentSampleId", row.uniqueParentSampleId());
+                rowMap.put("projectNameId", row.projectNameId());
+                rowMap.put("deliveryManifestReference", row.deliveryManifestReference());
+                rowMap.put("collectionDateTime", row.collectionDateTime());
+                rowMap.put("receptionDateTime", row.receptionDateTime());
+                rowMap.put("sourceOrigin", row.sourceOrigin());
+                // Sample type (validated against Immunology lab types)
                 rowMap.put("sampleType", row.sampleType());
                 // Optional fields
-                rowMap.put("alphanumericCode", row.alphanumericCode());
-                rowMap.put("chemicalIupacName", row.chemicalIupacName());
-                rowMap.put("gradeSpecification", row.gradeSpecification());
-                rowMap.put("chainOfCustodyDetails", row.chainOfCustodyDetails());
+                rowMap.put("sampleVolume", row.sampleVolume());
+                rowMap.put("storageConditionOnArrival", row.storageConditionOnArrival());
+                rowMap.put("transportTemperature", row.transportTemperature());
+                rowMap.put("receivingPersonnelName", row.receivingPersonnelName());
+                rowMap.put("manifestVerificationStatus", row.manifestVerificationStatus());
                 rowMap.put("patientId", row.patientId());
-                rowMap.put("clinicalTrialNumber", row.clinicalTrialNumber());
-                rowMap.put("consentStatus", row.consentStatus());
+                rowMap.put("notes", row.notes());
                 return rowMap;
             }).collect(Collectors.toList()));
             response.put("errors", allErrors.stream().map(error -> {
@@ -128,7 +129,7 @@ public class PharmaManifestImportController extends BaseRestController {
     @PostMapping(value = "/entry/{entryId}/samples/create-from-manifest", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public ResponseEntity<Map<String, Object>> createSamplesForEntry(@PathVariable("entryId") Integer entryId,
-            @RequestPart("file") MultipartFile file, @RequestPart("mapping") PharmaManifestImportForm form,
+            @RequestPart("file") MultipartFile file, @RequestPart("mapping") ImmunologyManifestImportForm form,
             HttpServletRequest httpRequest) {
 
         Optional<org.openelisglobal.notebook.valueholder.NotebookEntry> optEntry = notebookEntryService.getMatch("id",
@@ -145,7 +146,7 @@ public class PharmaManifestImportController extends BaseRestController {
         }
 
         try (InputStream inputStream = file.getInputStream()) {
-            ParsedManifest parsed = pharmaManifestImportService.parseManifestCsv(inputStream, form);
+            ParsedManifest parsed = immunologyManifestImportService.parseManifestCsv(inputStream, form);
 
             if (!parsed.errors().isEmpty()) {
                 Map<String, Object> response = new HashMap<>();
@@ -155,7 +156,7 @@ public class PharmaManifestImportController extends BaseRestController {
                 return ResponseEntity.badRequest().body(response);
             }
 
-            List<ParseError> validationErrors = pharmaManifestImportService.validateManifest(parsed);
+            List<ParseError> validationErrors = immunologyManifestImportService.validateManifest(parsed);
             if (!validationErrors.isEmpty()) {
                 Map<String, Object> response = new HashMap<>();
                 response.put("success", false);
@@ -164,8 +165,8 @@ public class PharmaManifestImportController extends BaseRestController {
                 return ResponseEntity.badRequest().body(response);
             }
 
-            PharmaManifestImportResult result = pharmaManifestImportService.createSamplesForEntry(entryId, parsed,
-                    sysUserId);
+            ImmunologyManifestImportResult result = immunologyManifestImportService.createSamplesForEntry(entryId,
+                    parsed, sysUserId);
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", result.errors().isEmpty());

@@ -175,8 +175,8 @@ public class NotebookBulkOperationController extends BaseRestController {
      * Get content change history for a notebook page. GET
      * /notebook/bulk/page/{pageId}/content/history
      *
-     * Returns the audit trail of all content changes (including QC parameters)
-     * for the specified page.
+     * Returns the audit trail of all content changes (including QC parameters) for
+     * the specified page.
      *
      * @param pageId the notebook page ID
      * @return list of history records with timestamps, users, and content changes
